@@ -1,1 +1,1 @@
-# TorProxyForDiscord
+# ProxyForDiscord
