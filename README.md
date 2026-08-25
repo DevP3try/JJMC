@@ -24,6 +24,9 @@ Consome virtualmente 0% de CPU e menos de 20MB de RAM enquanto repousa na Bandej
 ### Cross-Platform: 
 Arquitetura adaptada para funcionar perfeitamente em ambientes Windows e distribuições Linux (com fallback nativo de GUI).
 
+### Auto-Start Silencioso: 
+Configure o JJMC para iniciar automaticamente com o seu sistema operacional (Windows/Linux). Ele aguardará silenciosamente na sua Bandeja do Sistema, consumindo virtualmente 0% de CPU e menos de 20MB de RAM.
+
 ## Instalação e Uso
 
 Para Usuários Comuns (Windows)

@@ -15,7 +15,6 @@ def show_error_popup(title, message):
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)
     else:
-        # Fallback cross-platform usando Tkinter nativo do Python
         try:
             import tkinter as tk
             from tkinter import messagebox
@@ -44,12 +43,60 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
+# ======================================================
+# LÓGICA DE INICIALIZAÇÃO COM O SISTEMA (AUTO-START)
+# ======================================================
+def set_run_on_startup(enable: bool):
+    """Configura o programa para iniciar com o Windows ou Linux"""
+    # Define como o programa foi chamado (se é o .exe compilado ou script Python)
+    if getattr(sys, 'frozen', False):
+        exe_path = sys.executable
+    else:
+        exe_path = f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+        
+    # Argumento mágico para ele iniciar escondido
+    cmd = f'{exe_path} --startup'
+
+    if os.name == 'nt':
+        # WINDOWS: Adiciona na chave Run do Registro
+        try:
+            import winreg
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            app_name = "JJMC_Proxy_Automator"
+            registry_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            
+            if enable:
+                winreg.SetValueEx(registry_key, app_name, 0, winreg.REG_SZ, cmd)
+            else:
+                try:
+                    winreg.DeleteValue(registry_key, app_name)
+                except FileNotFoundError:
+                    pass
+            winreg.CloseKey(registry_key)
+        except Exception as e:
+            print(f"Erro no Registro do Windows: {e}")
+    else:
+        # LINUX: Adiciona na pasta ~/.config/autostart
+        try:
+            autostart_dir = os.path.expanduser("~/.config/autostart")
+            desktop_file = os.path.join(autostart_dir, "jjmc_proxy.desktop")
+            if enable:
+                os.makedirs(autostart_dir, exist_ok=True)
+                content = f"[Desktop Entry]\nType=Application\nName=JJMC Proxy\nExec={cmd}\nTerminal=false\nNoDisplay=true\n"
+                with open(desktop_file, 'w') as f:
+                    f.write(content)
+            else:
+                if os.path.exists(desktop_file):
+                    os.remove(desktop_file)
+        except Exception as e:
+            print(f"Erro no Autostart do Linux: {e}")
+
 try:
     import subprocess
     from PyQt6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
         QPushButton, QLabel, QSystemTrayIcon, QMenu, QMessageBox,
-        QRadioButton, QLineEdit, QGroupBox, QFormLayout
+        QRadioButton, QLineEdit, QGroupBox, QFormLayout, QCheckBox
     )
     from PyQt6.QtGui import QIcon, QAction
     from PyQt6.QtCore import QThread, pyqtSignal, Qt
@@ -77,13 +124,11 @@ class ConfigManager:
             try:
                 with open(self.config_path, "r") as f:
                     data = json.load(f)
-                    # Se for um config antigo, adiciona a lista de favoritos
-                    if "favorites" not in data:
-                        data["favorites"] = []
+                    if "favorites" not in data: data["favorites"] = []
+                    if "autostart" not in data: data["autostart"] = False
                     return data
-            except:
-                pass
-        return {"mode": "auto", "manual_ip": "", "manual_port": "", "favorites": []}
+            except: pass
+        return {"mode": "auto", "manual_ip": "", "manual_port": "", "favorites": [], "autostart": False}
 
     def save(self, mode, ip, port):
         self.config["mode"] = mode
@@ -91,14 +136,15 @@ class ConfigManager:
         self.config["manual_port"] = port
         self._write()
 
+    def save_autostart(self, enabled: bool):
+        self.config["autostart"] = enabled
+        self._write()
+
     def add_favorite(self, ip, port):
         favs = self.config.get("favorites", [])
         new_fav = {"ip": ip, "port": port}
-        # Se já existe, remove para colocar no topo como mais recente
-        if new_fav in favs: 
-            favs.remove(new_fav)
+        if new_fav in favs: favs.remove(new_fav)
         favs.insert(0, new_fav)
-        # Guarda no máximo o histórico dos 10 melhores
         self.config["favorites"] = favs[:10] 
         self._write()
         
@@ -106,8 +152,7 @@ class ConfigManager:
         try:
             with open(self.config_path, "w") as f:
                 json.dump(self.config, f)
-        except Exception as e:
-            print(f"Erro ao salvar configs: {e}")
+        except: pass
 
 class DiscordProxyManager:
     """Responsável por derrubar e reiniciar o Discord com compatibilidade Linux/Windows."""
@@ -117,7 +162,7 @@ class DiscordProxyManager:
             self.local_app_data = os.getenv('LOCALAPPDATA')
             self.discord_dir = os.path.join(self.local_app_data, 'Discord') if self.local_app_data else ""
         else:
-            self.discord_dir = "" # No Linux/Mac, o binário costuma estar no PATH global
+            self.discord_dir = ""
 
     def _get_discord_executable(self) -> str:
         if self.is_windows:
@@ -127,7 +172,7 @@ class DiscordProxyManager:
             folders.sort(reverse=True)
             return os.path.join(self.discord_dir, folders[0], "Discord.exe")
         else:
-            return "discord" # Comando padrão do Linux
+            return "discord"
 
     def _kill_existing_discord(self):
         if self.is_windows:
@@ -149,7 +194,6 @@ class DiscordProxyManager:
             
         proxy_url = f"{ip}:{port}"
         env = os.environ.copy()
-        # Injeta variáveis de ambiente para garantir que uploads de arquivos passem pelo proxy
         env["HTTP_PROXY"] = f"http://{proxy_url}"
         env["HTTPS_PROXY"] = f"http://{proxy_url}"
         env["http_proxy"] = f"http://{proxy_url}"
@@ -161,7 +205,7 @@ class DiscordProxyManager:
             discord_exe,
             f'--proxy-server=http={proxy_url};https={proxy_url}',
             '--proxy-bypass-list=127.0.0.1,localhost,<-loopback>,*.discord.media',
-            '--disable-quic' # Importante para não bloquear imagens
+            '--disable-quic' 
         ]
         
         try:
@@ -182,12 +226,10 @@ class DiscordProxyManager:
                 pass
 
 class ProxySniperWorker(QThread):
-    """Motor V7: VIP Fast Track (Histórico de Campeões) + Busca LatAm"""
     status_update = pyqtSignal(str)
     proxy_found = pyqtSignal(object)
     proxy_failed = pyqtSignal(str)
 
-    # Variáveis de classe (Memória Global)
     _cached_raw_ips = set()
     _last_fetch_time = 0
 
@@ -196,7 +238,6 @@ class ProxySniperWorker(QThread):
         self.config_manager = config_manager
 
     def _test_batch(self, proxy_list, timeout=2.0):
-        """Função auxiliar isolada para testar qualquer lista de proxies"""
         def test_single(proxy):
             start = time.perf_counter()
             try:
@@ -224,32 +265,21 @@ class ProxySniperWorker(QThread):
         return working
 
     def run(self):
-        # ======================================================
-        # ETAPA 1: O "Fast Track" (Testa os Favoritos Salvos)
-        # ======================================================
         favs = self.config_manager.config.get("favorites", [])
         if favs:
             self.status_update.emit(f"Testando Campeões Salvos...")
             vip_list = [ProxyInfo(ip=f["ip"], port=f["port"]) for f in favs]
-            
-            # Damos apenas 1.0s de tolerância. Se for lento, nem passa pelo teste!
             working_vips = self._test_batch(vip_list, timeout=1.0)
             
             if working_vips:
                 campeao = working_vips[0]
-                
-                # A REGRA DE OURO (Anti-Vício): Só aceita se for realmente rápido!
-                # Se for maior que 300ms, ele está degradado. Rejeitamos o Fast Track.
                 if campeao.ping_ms <= 300.0:
                     self.config_manager.add_favorite(campeao.ip, campeao.port)
                     self.proxy_found.emit(campeao)
-                    return # Encerra aqui, proxy excelente confirmado!
+                    return 
                 else:
                     self.status_update.emit(f"Proxy VIP lento ({campeao.ping_ms:.0f}ms). Buscando novos...")
 
-        # ======================================================
-        # ETAPA 2: A Busca na Internet (Radar LatAm)
-        # ======================================================
         current_time = time.time()
         raw_ips = set()
 
@@ -258,7 +288,6 @@ class ProxySniperWorker(QThread):
             raw_ips = set(self.__class__._cached_raw_ips)
         else:
             self.status_update.emit("Baixando Radar da América Latina...")
-            
             sources = [
                 "https://api.proxyscrape.com/v4/free-proxy-list/get?request=displayproxies&protocol=http,socks4,socks5&timeout=1500&country=AR,CL,UY,PY,BR,CO,PE&proxy_format=protocolipport&format=text",
                 "https://proxylist.geonode.com/api/proxy-list?protocols=socks5,socks4,http&limit=500&country=AR,CL,UY,PY,BR,CO,PE&speed=fast&sort_by=lastChecked&sort_type=desc",
@@ -275,12 +304,10 @@ class ProxySniperWorker(QThread):
                                 json_data = json.loads(data)
                                 if 'data' in json_data and isinstance(json_data['data'], list):
                                     for item in json_data['data']:
-                                        if 'ip' in item and 'port' in item:
-                                            raw_ips.add(f"{item['ip']}:{item['port']}")
+                                        if 'ip' in item and 'port' in item: raw_ips.add(f"{item['ip']}:{item['port']}")
                                 elif isinstance(json_data, list):
                                     for item in json_data:
-                                       if 'ip' in item and 'port' in item:
-                                            raw_ips.add(f"{item['ip']}:{item['port']}")
+                                       if 'ip' in item and 'port' in item: raw_ips.add(f"{item['ip']}:{item['port']}")
                             except: pass
                         else:
                             for line in data.splitlines():
@@ -311,7 +338,6 @@ class ProxySniperWorker(QThread):
 
         if working_proxies:
             campeao = working_proxies[0]
-            # Salva o novo campeão no JSON para o futuro!
             self.config_manager.add_favorite(campeao.ip, campeao.port)
             self.proxy_found.emit(campeao)
         else:
@@ -321,7 +347,8 @@ class ProxyApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JJMC Proxy Automator")
-        self.setFixedSize(400, 320)
+        # Janela um pouco maior para caber a nova opção perfeitamente
+        self.setFixedSize(400, 360) 
         self.config_manager = ConfigManager()
         self.discord_manager = DiscordProxyManager()
         self.is_running = False
@@ -364,6 +391,12 @@ class ProxyApp(QMainWindow):
         form_layout.addRow("Porta:", self.input_port)
         self.manual_group.setLayout(form_layout)
         layout.addWidget(self.manual_group)
+
+        # NOVA OPÇÃO: Checkbox de Auto-Start
+        self.checkbox_startup = QCheckBox("Iniciar minimizado junto com o sistema")
+        self.checkbox_startup.setStyleSheet("color: #555; margin-top: 5px;")
+        self.checkbox_startup.toggled.connect(self.on_startup_toggled)
+        layout.addWidget(self.checkbox_startup)
 
         self.btn_toggle = QPushButton("Ligar Proxy")
         self.btn_toggle.setFixedHeight(45)
@@ -408,11 +441,20 @@ class ProxyApp(QMainWindow):
         config = self.config_manager.config
         self.input_ip.setText(config.get("manual_ip", ""))
         self.input_port.setText(config.get("manual_port", ""))
+        
+        # Carrega o estado da checkbox baseado no JSON
+        self.checkbox_startup.setChecked(config.get("autostart", False))
+
         if config.get("mode") == "manual":
             self.radio_manual.setChecked(True)
         else:
             self.radio_auto.setChecked(True)
         self._toggle_manual_fields()
+
+    def on_startup_toggled(self, checked):
+        # Salva no JSON e insere/remove a chave no Windows Registry!
+        self.config_manager.save_autostart(checked)
+        set_run_on_startup(checked)
 
     def toggle_proxy(self):
         mode = "manual" if self.radio_manual.isChecked() else "auto"
@@ -440,7 +482,6 @@ class ProxyApp(QMainWindow):
             self.status_label.setText("Iniciando Motor Automático...")
             self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #ff9800;")
             
-            # Passamos o config_manager para que a Thread possa ler/salvar os favoritos
             self.worker = ProxySniperWorker(self.config_manager)
             self.worker.status_update.connect(self.on_worker_status)
             self.worker.proxy_found.connect(self.on_proxy_found)
@@ -496,9 +537,16 @@ class ProxyApp(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(None, "Erro", "Sistema Tray não suportado.")
         sys.exit(1)
+        
     window = ProxyApp()
-    window.show()
+    
+    # A MÁGICA DO AUTOSTART: Se o Windows abrir o programa, ele vai passar "--startup"
+    # Se tiver "--startup", não chamamos window.show(), ele fica escondido na bandeja!
+    if "--startup" not in sys.argv:
+        window.show()
+        
     sys.exit(app.exec())

@@ -1,6 +1,8 @@
 proxytest/
-
+build/
+dist/
 tor/JJMC/tor/Tor Browser/
 dist/build/*.spec
 pycache/*.pyc crash_log.txt
 jjmc_config.json
+*.spec
