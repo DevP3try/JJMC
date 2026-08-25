@@ -1,0 +1,2 @@
+JJMC/tor/Tor[[:space:]]Browser/Browser/xul.dll filter=lfs diff=lfs merge=lfs -text
+tor/tor-browser-windows-x86_64-portable-15.0.20.exe filter=lfs diff=lfs merge=lfs -text
