@@ -32,7 +32,7 @@ Você não precisa instalar o Python ou entender de código.
 
 Vá até a aba Releases deste repositório (ou acesse a pasta dist se estiver clonando).
 
-Baixe o arquivo ``JJMC.exe
+Baixe o arquivo ``JJMC.exe``
 
 Dê um duplo clique para abrir. O programa ficará minimizado ao lado do relógio do Windows.
 
@@ -40,6 +40,8 @@ Escolha entre "Modo Automático" ou insira seu IP no "Modo Manual" e clique em L
 
 Nota: O Windows Defender pode exibir um alerta de segurança na primeira execução (Falso Positivo). Isso ocorre porque o software altera os parâmetros de execução do processo do Discord. Basta clicar em "Mais informações" e "Executar assim mesmo".
 
+Em caso de transmisssao ao vivo nao carregar, aperte ctrl + r para recarregar a pagina do discord e transmitir novamente.
+ 
 Para Desenvolvedores (Rodando do código-fonte)
 
 Clone o repositório:
