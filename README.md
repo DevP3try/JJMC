@@ -44,17 +44,17 @@ Para Desenvolvedores (Rodando do código-fonte)
 
 Clone o repositório:
 
-``git clone https://github.com/DevP3try/JJMC.git``
+```git clone https://github.com/DevP3try/JJMC.git```
 
 
 Instale as dependências da interface gráfica:
 
-``pip install PyQt6``
+```pip install PyQt6```
 
 
 Execute o motor principal:
 
-``python JJMC.py``
+```python JJMC.py```
 
 
 ### Como Compilar (.exe)
@@ -62,10 +62,10 @@ Execute o motor principal:
 Se você fez alterações no código e deseja gerar o seu próprio arquivo executável:
 
 #### Instale o empacotador
-``pip install pyinstaller
+```pip install pyinstaller```
 
 #### Gere o executável silencioso
-``python -m PyInstaller --noconsole --onefile JJMC.py
+```python -m PyInstaller --noconsole --onefile JJMC.py```
 
 
 O arquivo final estará disponível na pasta dist/.
